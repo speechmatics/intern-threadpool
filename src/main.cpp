@@ -73,10 +73,12 @@ int main() {
     std::cout << t2.promise().result() << std::endl;
     std::cout << t3.promise().result() << std::endl;
 
-    // ring_buffer<int, 3> rb{};
-    // task p1 = producer(rb, tp);
-    // task p2 = producer(rb, tp);
-    // task c1 = consumer(rb, tp);
-    // task c2 = consumer(rb, tp);
-    // sync_wait(p1, p2, c1, c2);
+    std::cout << std::endl << "Producer/Consumer: " << std::endl;
+
+    ring_buffer<int, 3> rb{};
+    task p1 = producer(rb, tp);
+    task p2 = producer(rb, tp);
+    task c1 = consumer(rb, tp);
+    task c2 = consumer(rb, tp);
+    sync_wait(p1, p2, c1, c2);
 }
