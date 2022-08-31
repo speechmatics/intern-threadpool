@@ -79,6 +79,7 @@ class threadpool {
 
             auto coro = m_coros.front();
             m_coros.pop();
+            lock.unlock();
             coro.resume();
         }
     }
