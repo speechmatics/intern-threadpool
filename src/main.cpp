@@ -37,7 +37,13 @@ coroutine starter() {
 
 int main() {
     threadpool tp{2};
-    task t = square_task_pool(4, tp);
-    sync_wait(t);
-    std::cout << t.promise().result() << std::endl;
+    task t1 = square_task_pool(4, tp);
+    task t2 = square_task_pool(8, tp);
+    task t3 = square_task_pool(16, tp);
+    sync_wait(t1);
+    sync_wait(t2);
+    sync_wait(t3);
+    std::cout << t1.promise().result() << std::endl;
+    std::cout << t2.promise().result() << std::endl;
+    std::cout << t3.promise().result() << std::endl;
 }
