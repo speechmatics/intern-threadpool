@@ -6,11 +6,15 @@
 #include <condition_variable>
 #include <atomic>
 #include <list>
+#include <thread>
+#include <array>
+#include <tuple>
+#include <iostream>
 #include "task.h"
 
 class threadpool {
     public:
-        explicit threadpool(const std::size_t threadCount) {
+        explicit threadpool(const std::size_t threadCount = std::thread::hardware_concurrency()) {
             for (std::size_t i = 0; i < threadCount; ++i) {
                 std::thread worker_thread([this]() {
                     this->thread_loop();
@@ -21,7 +25,7 @@ class threadpool {
 
         ~threadpool() { shutdown(); }
 
-        auto schedule() {
+        [[nodiscard]] auto schedule() {
             // You can await on scheduling by co_awaiting this method
             // from inside a coroutine
             struct awaiter {
@@ -35,6 +39,20 @@ class threadpool {
             };
             return awaiter{this};
         };
+
+        template<typename... arguments>
+        [[nodiscard]] auto schedule(auto f, arguments... args)
+            -> task<decltype(f(std::forward<arguments>(args)...))> {
+            co_await schedule();
+
+            if constexpr (std::is_same_v<void, decltype(f(std::forward<arguments>(args)...))>) {
+                f(std::forward<arguments>(args)...);
+                co_return;
+            }
+            else {
+                co_return f(std::forward<arguments>(args)...);
+            }
+        }
 
     private:
         std::queue<std::coroutine_handle<>> m_coros;
@@ -148,12 +166,20 @@ inline void sync_wait_task::run(fire_once_event& event) {
     m_handle.resume();
 }
 
-template <typename T>
-inline void sync_wait(task<T>& t) {
-    fire_once_event event;
-    auto wait_task = make_sync_wait_task(t);
-    wait_task.run(event);
-    event.wait();
+template <typename... T>
+inline void sync_wait(task<T>&... t) {
+    std::array<fire_once_event, sizeof... (t)> events{};
+    std::array<sync_wait_task, sizeof... (t)> wait_tasks{ make_sync_wait_task(t)... };
+
+    std::apply([&] (auto&... _events) {
+        std::apply([&] (auto&... _wait_tasks) {
+            ( _wait_tasks.run(_events), ... );
+        }, wait_tasks);
+    }, events);
+    
+    std::apply([&](auto&... _events) {
+        ( _events.wait(), ... );
+    }, events);
 }
 
 template <typename T>
