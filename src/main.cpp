@@ -75,7 +75,7 @@ int main() {
 
     std::cout << std::endl << "Producer/Consumer: " << std::endl;
 
-    ring_buffer<int, 3> rb{};
+    ring_buffer<int, 3> rb{tp};
     task p1 = producer(rb, tp);
     task p2 = producer(rb, tp);
     task c1 = consumer(rb, tp);

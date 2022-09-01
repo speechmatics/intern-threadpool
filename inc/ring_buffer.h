@@ -5,6 +5,7 @@
 #include <coroutine>
 #include <mutex>
 #include <optional>
+#include "threadpool.h"
 
 /**
  * @tparam element The type of element the ring buffer will store.  Note that this type should be
@@ -25,7 +26,7 @@ public:
     /**
      * @throws std::runtime_error If `num_elements` == 0.
      */
-    ring_buffer()
+    ring_buffer(threadpool& tp) : m_tp{tp}
     {
         if (num_elements == 0)
         {
@@ -198,7 +199,7 @@ public:
             m_produce_waiters    = m_produce_waiters->m_next;
 
             lk.unlock();
-            to_resume->m_awaiting_coroutine.resume();
+            m_tp.enqueue_task(to_resume->m_awaiting_coroutine);
             lk.lock();
         }
 
@@ -209,7 +210,7 @@ public:
             m_consume_waiters    = m_consume_waiters->m_next;
 
             lk.unlock();
-            to_resume->m_awaiting_coroutine.resume();
+            m_tp.enqueue_task(to_resume->m_awaiting_coroutine);
             lk.lock();
         }
     }
@@ -217,6 +218,8 @@ public:
 private:
     friend produce_operation;
     friend consume_operation;
+
+    threadpool& m_tp;
 
     std::mutex m_mutex{};
 
@@ -257,7 +260,7 @@ private:
             --m_used; // And we just consumed up another item.
 
             lk.unlock();
-            to_resume->m_awaiting_coroutine.resume();
+            m_tp.enqueue_task(to_resume->m_awaiting_coroutine);
         }
 
         return true;
@@ -285,7 +288,7 @@ private:
             ++m_used; // And we just produced another item.
 
             lk.unlock();
-            to_resume->m_awaiting_coroutine.resume();
+            m_tp.enqueue_task(to_resume->m_awaiting_coroutine);
         }
 
         return true;

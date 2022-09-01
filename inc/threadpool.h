@@ -54,18 +54,18 @@ class threadpool {
             }
         }
 
+        void enqueue_task(std::coroutine_handle<> coro) noexcept {
+            std::unique_lock<std::mutex> lock(m_mutex);
+            m_coros.emplace(coro);
+            m_cond.notify_one();
+        }
+
     private:
         std::queue<std::coroutine_handle<>> m_coros;
         std::mutex m_mutex;
         std::condition_variable m_cond;
         std::atomic_bool m_stop_thread{false};
         std::list<std::thread> m_threads;
-    
-    void enqueue_task(std::coroutine_handle<> coro) noexcept {
-        std::unique_lock<std::mutex> lock(m_mutex);
-        m_coros.emplace(coro);
-        m_cond.notify_one();
-    }
 
     void thread_loop() {
         while (!m_stop_thread) {
@@ -172,8 +172,8 @@ inline void sync_wait(task<T>&... t) {
     std::array<fire_once_event, sizeof... (t)> events{};
     std::array<sync_wait_task, sizeof... (t)> wait_tasks{ make_sync_wait_task(t)... };
 
-    std::apply([&] (auto&... _events) {
-        std::apply([&] (auto&... _wait_tasks) {
+    std::apply([&] (std::same_as<fire_once_event> auto&... _events) {
+        std::apply([&] (std::same_as<sync_wait_task> auto&... _wait_tasks) {
             ( _wait_tasks.run(_events), ... );
         }, wait_tasks);
     }, events);
