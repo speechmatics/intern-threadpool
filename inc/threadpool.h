@@ -1,5 +1,8 @@
 #pragma once
 
+#include <boost/asio/execution/blocking.hpp>
+#include <boost/asio/execution/context.hpp>
+#include <boost/asio/execution_context.hpp>
 #include <coroutine>
 #include <mutex>
 #include <queue>
@@ -10,9 +13,13 @@
 #include <array>
 #include <tuple>
 #include <iostream>
+#include <functional>
 #include "task.h"
 
-class threadpool {
+#include <boost/asio/execution/executor.hpp>
+#include <boost/asio/execution/context.hpp>
+
+class threadpool : public boost::asio::execution_context {
     public:
         explicit threadpool(const std::size_t threadCount = std::thread::hardware_concurrency()) {
             for (std::size_t i = 0; i < threadCount; ++i) {
@@ -54,14 +61,20 @@ class threadpool {
             }
         }
 
-        void enqueue_task(std::coroutine_handle<> coro) noexcept {
+        void enqueue_task(std::coroutine_handle<> coro) {
             std::unique_lock<std::mutex> lock(m_mutex);
-            m_coros.emplace(coro);
+            m_coros.emplace([coro](){ coro.resume(); });
+            m_cond.notify_one();
+        }
+
+        void execute(std::function<void()> f) {
+            std::unique_lock<std::mutex> lock(m_mutex);
+            m_coros.emplace(std::move(f));
             m_cond.notify_one();
         }
 
     private:
-        std::queue<std::coroutine_handle<>> m_coros;
+        std::queue<std::function<void()>> m_coros;
         std::mutex m_mutex;
         std::condition_variable m_cond;
         std::atomic_bool m_stop_thread{false};
@@ -80,7 +93,7 @@ class threadpool {
             auto coro = m_coros.front();
             m_coros.pop();
             lock.unlock();
-            coro.resume();
+            coro();
         }
     }
 
@@ -161,6 +174,39 @@ struct sync_wait_task_promise {
 
     void unhandled_exception() noexcept { exit(1); }
 };
+
+class threadpool_executor {
+    private:
+    std::shared_ptr<threadpool> pool_ptr;
+    public:
+    explicit threadpool_executor(const std::size_t threadCount = std::thread::hardware_concurrency())
+    : pool_ptr(std::make_shared<threadpool>(threadCount))
+    {}
+
+    bool operator==(const threadpool_executor&) const = default;
+
+    auto schedule() {
+        return pool_ptr->schedule();
+    }
+
+    void execute(std::function<void()> f) const {
+        pool_ptr->execute(std::move(f));
+    }
+
+    threadpool& get_pool() const {
+        return *pool_ptr;
+    }
+
+    threadpool& query(boost::asio::execution::context_t) const {
+        return *pool_ptr;
+    }
+
+    static constexpr auto query(boost::asio::execution::blocking_t) {
+        return boost::asio::execution::blocking.never;
+    }
+};
+
+static_assert(boost::asio::execution::is_executor_v<threadpool_executor>);
 
 inline void sync_wait_task::run(fire_once_event& event) {
     m_handle.promise().m_event = &event;
