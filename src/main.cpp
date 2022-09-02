@@ -85,23 +85,18 @@ int main() {
         co_await tp.schedule();
 
         boost::system::error_code error;
-        
+        auto* promise = co_await get_promise<detail::promise<void>>{};
 
         int i = 0;
-        while (i < 100) {
-            auto send = [&] () -> task<> {
-                // co_await tp.schedule();
-                auto* promise = co_await get_promise<detail::promise<void>>{};
-                channel.async_send({}, i, get_completion_handler_send<detail::promise<void>>(tp.get_pool(), *promise, error));
-                co_return;
-            };
-            task send_task = send();
-            co_await send_task;
+        while (true) {
+            channel.async_send({}, i, get_completion_handler_send<detail::promise<void>>(tp.get_pool(), *promise, error));
+            co_await std::suspend_always{};
             // std::this_thread::sleep_for(std::chrono::seconds(1));
-            std::cout << "Sent " << i << std::endl;
+            //std::cout << "Sent " << i << std::endl;
+            
+            for (volatile int j = 0; j<1000000; j = j + 1);
             ++i;
         }
-        channel.close();
     };
 
     auto sink = [&] () -> task<> {
@@ -110,18 +105,13 @@ int main() {
         boost::system::error_code error;
         size_t data;
         auto* promise = co_await get_promise<detail::promise<void>>{};
-        auto receive = [&] () -> task<> {
-            // co_await tp.schedule();
 
+        for (size_t i{0}; true; ++i) {
             channel.async_receive(get_completion_handler_receive<detail::promise<void>>(tp.get_pool(), *promise, error, data));
-            co_return;
-        };
-
-        for (size_t i{0}; i < 20; ++i) {
-            task receive_task = receive();
-            co_await receive_task;
+            co_await std::suspend_always{};
             // std::this_thread::sleep_for(std::chrono::seconds(1));
-            std::cout << "Received " << data << std::endl;
+            //std::cout << "Received " << data << std::endl;
+            for (volatile int j = 0; j<1000000; j = j + 1);
         }
     };
 
