@@ -7,6 +7,9 @@
 #include <optional>
 #include "threadpool.h"
 
+// This is essentially the ring_buffer from libcoro,
+// with comments added for explanation
+
 /**
  * @tparam element The type of element the ring buffer will store.  Note that this type should be
  *         cheap to move if possible as it is moved into and out of the buffer upon produce and
@@ -17,6 +20,9 @@ template<typename element, size_t num_elements>
 class ring_buffer
 {
 public:
+    // This is returned to the caller of consume(),
+    // telling them if the produce operation succeeded,
+    // of if the ring_buffer was stopped before it could be completed
     enum class produce_result
     {
         produced,
@@ -46,10 +52,25 @@ public:
     auto operator=(const ring_buffer<element, num_elements>&) noexcept -> ring_buffer<element, num_elements>& = delete;
     auto operator=(ring_buffer<element, num_elements>&&) noexcept -> ring_buffer<element, num_elements>&      = delete;
 
+    // This concept of an operation is often seen in coroutine code
+    // Essentially an operation is an awaitable (remember that you cannot co_await a coroutine)
+    // We would like a user of the ring_buffer (or any coroutine library) be able to say
+    // co_await method_name(...)
+    // To allow for this, method_name(...) returns an awaitable operation, which actually does the heavy-lifting
+    // it its await_ready, await_suspend and await_resume methods
+    // In this case, the awaitable operation is produce_operation, and method_name(...) is produce(element e)
+    // This operation also contains the element we want to insert into the ring_buffer and stores the coroutine_handle
+    // There is also an implicit linked list of produce_operation - produce_waiters
+    // This is used by the ring_buffer, which holds a pointer to the head of this list
+    // when choosing to resume a coroutine in a FIFO manner
+    // When choosing to resume, the ring_buffer enqueues the head onto the threadpool's queue
     struct produce_operation
     {
         produce_operation(ring_buffer<element, num_elements>& rb, element e) : m_rb(rb), m_e(std::move(e)) {}
 
+        // An optimisation - we don't have to suspend the current coroutine
+        // if there is space in the ring_buffer
+        // We simply put the item in
         auto await_ready() noexcept -> bool
         {
             std::unique_lock lk{m_rb.m_mutex};
@@ -96,6 +117,8 @@ public:
         bool m_stopped{false};
     };
 
+    // Very similar in concept to the producer_operation
+    // Note that the expected type in libcoro is replaced here with std::optional
     struct consume_operation
     {
         explicit consume_operation(ring_buffer<element, num_elements>& rb) : m_rb(rb) {}
@@ -181,6 +204,12 @@ public:
      * Wakes up all currently awaiting producers and consumers.  Their await_resume() function
      * will return an expected consume result that the ring buffer has stopped.
      */
+    // notify_waiters() is the name given to the method to shutdown the ring_buffer
+    // It is called as such as to shutdown, it notifies all producer and consumer waiters
+    // Upon waking up, the await_resume method in produce/consume_operation is fired
+    // which checks if the ring_buffer is stopped first (by checking a flag in the ring_buffer)
+    // If the ring_buffer has stopped, then a value is returned to the caller of
+    // produce(element e) or consume() indicating this failure
     auto notify_waiters() -> void
     {
         // Only wake up waiters once.
@@ -238,8 +267,10 @@ private:
 
     std::atomic<bool> m_stopped{false};
 
+    // This method is called
     auto try_produce_locked(std::unique_lock<std::mutex>& lk, element& e) -> bool
     {
+        // We must suspend if the ring_buffer is full
         if (m_used == num_elements)
         {
             return false;
@@ -249,6 +280,8 @@ private:
         m_front             = (m_front + 1) % num_elements;
         ++m_used;
 
+        // Since something has been produced, we can allow fulfilling the request
+        // of one waiting consumer
         if (m_consume_waiters != nullptr)
         {
             consume_operation* to_resume = m_consume_waiters;
@@ -268,6 +301,7 @@ private:
 
     auto try_consume_locked(std::unique_lock<std::mutex>& lk, consume_operation* op) -> bool
     {
+        // We must suspend if the ring_buffer is empty
         if (m_used == 0)
         {
             return false;
@@ -277,6 +311,8 @@ private:
         m_back  = (m_back + 1) % num_elements;
         --m_used;
 
+        // Since something has been consumed, we can allow fulfilling the request
+        // of one waiting producer
         if (m_produce_waiters != nullptr)
         {
             produce_operation* to_resume = m_produce_waiters;
