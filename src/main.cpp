@@ -84,19 +84,19 @@ int main() {
     auto source = [&] () -> task<> {
         co_await tp.schedule();
 
-        boost::system::error_code error;
         auto* promise = co_await get_promise<detail::promise<void>>{};
 
-        int i = 0;
-        while (true) {
-            channel.async_send({}, i, get_completion_handler_send<detail::promise<void>>(tp.get_pool(), *promise, error));
-            co_await std::suspend_always{};
+        boost::system::error_code error;
+
+        for (size_t i{0}; i < 10000; ++i) {
+            // channel.async_send({}, i, get_completion_handler_send<detail::promise<void>>(tp.get_pool(), *promise, error));
+            // co_await std::suspend_always{};
+            co_await channel_async_send(channel, error, i, tp);
             // std::this_thread::sleep_for(std::chrono::seconds(1));
-            //std::cout << "Sent " << i << std::endl;
-            
-            for (volatile int j = 0; j<1000000; j = j + 1);
-            ++i;
+            std::cout << "Sent " << i << std::endl;
         }
+
+        channel.close();
     };
 
     auto sink = [&] () -> task<> {
@@ -107,11 +107,10 @@ int main() {
         auto* promise = co_await get_promise<detail::promise<void>>{};
 
         for (size_t i{0}; true; ++i) {
-            channel.async_receive(get_completion_handler_receive<detail::promise<void>>(tp.get_pool(), *promise, error, data));
-            co_await std::suspend_always{};
+            if (!channel.is_open()) co_return;
+            data = co_await channel_async_receive(channel, error, tp);
             // std::this_thread::sleep_for(std::chrono::seconds(1));
-            //std::cout << "Received " << data << std::endl;
-            for (volatile int j = 0; j<1000000; j = j + 1);
+            std::cout << "Received " << data << std::endl;
         }
     };
 
