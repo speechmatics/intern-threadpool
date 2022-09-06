@@ -51,6 +51,7 @@ auto get_completion_handler_receive(threadpool& tp, prom_type& promise, boost::s
     };
 }
 
+// A template type alias for the Boost channel
 template <typename T>
 using channel = boost::asio::experimental::basic_concurrent_channel<
         threadpool_executor,
@@ -58,6 +59,7 @@ using channel = boost::asio::experimental::basic_concurrent_channel<
         void(boost::system::error_code, T)
 >;
 
+// The awaitable used for the channel.async_send
 template <typename T>
 struct channel_async_send_operation {
     channel<T>& m_channel;
@@ -90,6 +92,7 @@ channel_async_send_operation<T> channel_async_send(channel<T>& channel,
                                                         };
                                                     }
 
+// The awaitable used for the channel.async_receive
 template <typename T>
 struct channel_async_receive_operation {
     channel<T>& m_channel;
