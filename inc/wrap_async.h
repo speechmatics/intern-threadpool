@@ -1,5 +1,6 @@
 #pragma once
 #include <boost/asio/experimental/basic_concurrent_channel.hpp>
+#include <boost/asio/experimental/channel_error.hpp>
 #include <boost/asio/experimental/channel_traits.hpp>
 #include <coroutine>
 #include <cstddef>
@@ -7,6 +8,7 @@
 #include "task.h"
 #include "threadpool.h"
 #include <boost/system/error_code.hpp>
+#include <optional>
 
 // Get a coroutine's promise object from within that coroutine
 // Use by: co_await get_promise{};
@@ -109,7 +111,12 @@ struct channel_async_receive_operation {
         m_channel.async_receive(get_completion_handler_receive<detail::promise<void>>(m_tp.get_pool(), h.promise(), m_error_code, m_data));
     }
 
-    T await_resume() { return m_data; }
+    std::optional<T> await_resume() { 
+        if (m_error_code == boost::asio::experimental::error::make_error_code(
+            boost::asio::experimental::error::channel_errors::channel_closed
+        )) return {};
+        return m_data;
+    }
 };
 
 template <typename T>

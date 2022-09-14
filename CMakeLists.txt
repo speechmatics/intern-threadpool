@@ -20,3 +20,25 @@ set_property(TARGET threadpool PROPERTY CXX_STANDARD 20)
 target_include_directories(threadpool PUBLIC "${CMAKE_SOURCE_DIR}/inc")
 
 target_link_libraries(threadpool PRIVATE Threads::Threads Boost::coroutine Boost::system)
+
+# Demo Project
+
+set(CMAKE_PREFIX_PATH "lib/cmake/easy_profiler")
+
+find_package(easy_profiler)
+
+set(demo_sources
+    demo.cpp
+)
+
+list(TRANSFORM demo_sources PREPEND "src/")
+
+add_executable(demo ${demo_sources})
+
+set_property(TARGET demo PROPERTY CXX_STANDARD 20)
+
+target_include_directories(demo PUBLIC "${CMAKE_SOURCE_DIR}/inc")
+
+target_link_libraries(demo PRIVATE Threads::Threads Boost::coroutine Boost::system easy_profiler)
+
+target_compile_definitions(demo PUBLIC BUILD_WITH_EASY_PROFILER)

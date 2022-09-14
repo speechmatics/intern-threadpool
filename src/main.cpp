@@ -56,7 +56,7 @@ template <typename ...T>
 struct error;
 
 int main() {
-    threadpool_executor tp{1};
+    threadpool_executor tp{3};
     // task t1 = square_task_pool(4, tp);
     // task t2 = square_task_pool(8, tp);
     // task t3 = square_task_pool(16, tp);
@@ -103,18 +103,20 @@ int main() {
         co_await tp.schedule();
 
         boost::system::error_code error;
-        size_t data;
+        std::optional<size_t> data;
         auto* promise = co_await get_promise<detail::promise<void>>{};
 
         for (size_t i{0}; true; ++i) {
-            if (!channel.is_open()) co_return;
             data = co_await channel_async_receive(channel, error, tp);
+            if (!data.has_value()) co_return;
             // std::this_thread::sleep_for(std::chrono::seconds(1));
-            std::cout << "Received " << data << std::endl;
+            std::cout << "Received " << data.value() << std::endl;
         }
     };
 
-    task source_task = source();
-    task sink_task = sink();
-    sync_wait(source_task, sink_task);
+    task source_task_1 = source();
+    // task source_task_2 = source();
+    task sink_task_1 = sink();
+    task sink_task_2 = sink();
+    sync_wait(source_task_1, sink_task_1, sink_task_2);
 }
