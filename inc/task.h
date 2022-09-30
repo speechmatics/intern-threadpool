@@ -1,3 +1,9 @@
+// Copyright 2020-2021 Josh Baldwin
+// Modifications copyright 2022 Cantab Research Ltd.
+// Licensed under the Apache 2.0 license. See LICENSE.txt in the project root for details.
+//
+// Modifications are made against
+// https://github.com/jbaldwin/libcoro/blob/acbe30156594c673bcaef6e02041c9e080053f20/inc/coro/task.hpp
 #pragma once
 
 #include <coroutine>

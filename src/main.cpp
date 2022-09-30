@@ -1,3 +1,5 @@
+// Copyright 2022 Cantab Research Ltd.
+// Licensed under the MIT license. See LICENSE.txt in the project root for details.
 #include <boost/asio/experimental/channel_traits.hpp>
 #include <coroutine>
 #include <cstddef>
