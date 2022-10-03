@@ -1,3 +1,10 @@
+// Copyright 2021-2022 Josh Baldwin
+// Modifications copyright 2022 Cantab Research Ltd.
+// Licensed under the Apache 2.0 license. See LICENSE.txt in the project root for details.
+//
+// Modifications are made to be compatible with our threadpool implementation
+// Modifications are made against
+// https://github.com/jbaldwin/libcoro/blob/acbe30156594c673bcaef6e02041c9e080053f20/inc/coro/ring_buffer.hpp
 #pragma once
 
 #include <array>
